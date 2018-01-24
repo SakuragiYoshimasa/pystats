@@ -7,28 +7,28 @@ import numpy as np
 # 1 - way anova １要因被験者間分散分析
 # 分散分析表をreturnする
 @jit
-def one_way_anova(df, factorCol, valCol):
-    factors = list(pd.unique(df[factorCol]))
-    factor_num = len(factors)
+def one_way_anova(df, cohortCol, valCol):
+    cohorts = list(pd.unique(df[cohortCol]))
+    cohort_num = len(cohorts)
     data_num = df[valCol].count()
 
     mean_w = df[valCol].mean()
-    mean_fs = {}
+    mean_cs = {}
     deg_of_freedoms = {}
-    for factor in factors:
-        mean_fs[factor] = df[df[factorCol] == factor][valCol].mean()
-        deg_of_freedoms[factor] = len(df[df[factorCol] == factor].values) - 1
+    for cohort in cohorts:
+        mean_cs[cohort] = df[df[cohortCol] == cohort][valCol].mean()
+        deg_of_freedoms[cohort] = len(df[df[cohortCol] == cohort].values) - 1
 
     # Degree of freedoms
-    dof_inter = factor_num - 1
+    dof_inter = cohort_num - 1
     dof_intra = sum(deg_of_freedoms.values())
     dof_w = dof_inter + dof_intra
 
     # sum of squares
     sqrt_w = sum_of_square(df[valCol].values, mean_w)
     sqrt_intra = 0
-    for factor in factors:
-        sqrt_intra += sum_of_square(df[df[factorCol] == factor][valCol].values, mean_fs[factor])
+    for cohort in cohorts:
+        sqrt_intra += sum_of_square(df[df[cohortCol] == cohort][valCol].values, mean_cs[cohort])
     sqrt_inter = sqrt_w - sqrt_intra
 
     # mean squares
@@ -39,8 +39,8 @@ def one_way_anova(df, factorCol, valCol):
 
     table = pd.DataFrame({
         'factor': ['inter', 'intra', 'whole'],
-        'deg of freedom': [dof_inter, dof_intra, dof_w],
-        'mean square': [ave_sqrt_inter, ave_sqrt_intra, None],
+        'dof': [dof_inter, dof_intra, dof_w],
+        'mean_S': [ave_sqrt_inter, ave_sqrt_intra, None],
         'F': [F, None, None]
     })
-    return table
+    return table.ix[:, ['factor', 'dof', 'mean_S', 'F']]
