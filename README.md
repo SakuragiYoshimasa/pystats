@@ -20,5 +20,6 @@ cat files.txt | xargs rm -rf
 - pandas
 - scipy
 - matplotlib
+- numba
 
 ## Usage
