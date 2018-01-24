@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 
 # 1 - way anova １要因被験者間分散分析
-# F 値をreturn
+# 分散分析表をreturnする
 @jit
 def one_way_anova(df, factorCol, valCol):
     factors = list(pd.unique(df[factorCol]))
@@ -36,4 +36,11 @@ def one_way_anova(df, factorCol, valCol):
     ave_sqrt_intra = sqrt_intra / dof_intra
 
     F = ave_sqrt_inter / ave_sqrt_intra
-    return F
+
+    table = pd.DataFrame({
+        'factor': ['inter', 'intra', 'whole'],
+        'deg of freedom': [dof_inter, dof_intra, dof_w],
+        'mean square': [ave_sqrt_inter, ave_sqrt_intra, None],
+        'F': [F, None, None]
+    })
+    return table
