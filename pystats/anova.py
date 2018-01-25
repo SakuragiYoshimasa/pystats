@@ -1,6 +1,7 @@
 #coding: utf-8
 from numba import jit
 from pystats.utility import sum_of_square
+from pystats.utility import sum_of_square_with_weight
 import pandas as pd
 import numpy as np
 
@@ -74,7 +75,6 @@ def two_way_anova_between_subject(df, levelACol, levelBCol, valCol):
     })
     return table.ix[:, ['factor', 'sos', 'dof', 'mean_S', 'F']]
 
-@jit
 def two_way_anova_within_subject(df, levelACol, levelBCol, subjectCol, valCol):
     levelAs = list(pd.unique(df[levelACol]))
     levelBs = list(pd.unique(df[levelBCol]))
@@ -95,61 +95,52 @@ def two_way_anova_within_subject(df, levelACol, levelBCol, subjectCol, valCol):
     sos_w = sum_of_square(df[valCol].values, cell_mean['whole'])
 
     # 要因Aの主効果の平方和
-    sos_factorA = 0
-    for levelA in levelAs:
-        sos_factorA += np.square(cell_mean[levelA]['mean_A'] - cell_mean['whole']) * len(df[df[levelACol] == levelA].values)
+    data = np.array([cell_mean[levelA]['mean_A'] for levelA in levelAs], dtype='float64')
+    sizes = np.array([len(df[df[levelACol] == levelA].values) for levelA in levelAs], dtype='float64')
+    sos_factorA = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
 
     # 要因Bの主効果の平方和
-    sos_factorB = 0
-    for levelB in levelBs:
-        sos_factorB += np.square(cell_mean['mean_B'][levelB] - cell_mean['whole']) * len(df[df[levelBCol] == levelB].values)
+    data = np.array([cell_mean['mean_B'][levelB] for levelB in levelBs], dtype='float64')
+    sizes = np.array([len(df[df[levelBCol] == levelB].values) for levelB in levelBs], dtype='float64')
+    sos_factorB = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
 
     # セル平均の平方和
-    sos_cell = 0
-    for levelA in levelAs:
-        for levelB in levelBs:
-            sos_cell += np.square(cell_mean[levelA][levelB] - cell_mean['whole']) * len(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)].values)
+    data = np.array([cell_mean[levelA][levelB] for levelA in levelAs for levelB in levelBs], dtype='float64')
+    sizes = np.array([len(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)].values) for levelA in levelAs for levelB in levelBs], dtype='float64')
+    sos_cell = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
 
     # 交互作用の平方和
     sos_interaction = sos_cell - sos_factorA - sos_factorB
 
     # 誤差の平方和
-    sos_error = 0
-    for levelA in levelAs:
-        for levelB in levelBs:
-            sos_error += sum_of_square(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)][valCol].values, cell_mean[levelA][levelB])
+    data = np.array([sum_of_square(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)][valCol].values, cell_mean[levelA][levelB]) for levelA in levelAs for levelB in levelBs], dtype='float64')
+    sos_error = np.sum(data)
 
     # ここまでは同様
     # 誤差の平方和 = 個人差の平方和 + 要因Aに対する誤差の平方和 + 要因Bに対する誤差の平方和 + 交互作用に対する誤差の平方和　に分解
-
     subjects = list(pd.unique(df[subjectCol]))
-    mean_ss = {} # 各被験者の平均
-    for subject in subjects:
-        mean_ss[subject] = df[df[subjectCol] == subject][valCol].mean()
+    mean_ss = {subject: df[df[subjectCol] == subject][valCol].mean() for subject in subjects} # 各被験者の平均
+
     # 個人差の平方和
-    sos_subject = 0
-    for subject in subjects:
-        sos_subject += np.square(mean_ss[subject] - cell_mean['whole']) * len(df[df[subjectCol] == subject][valCol].values)
+    data = np.array(list(mean_ss.values()), dtype='float64')
+    sizes = np.array([len(df[df[subjectCol] == subject][valCol].values) for subject in subjects], dtype='float64')
+    sos_subject = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
 
     # 要因Aに対する誤差の平方和
-    sos_factorA_error = 0
-    for subject in subjects:
-        for levelA in levelAs:
-            mean_levelA = df[(df[subjectCol] == subject) & (df[levelACol] == levelA)][valCol].mean()
-            sos_factorA_error += np.square(mean_levelA - cell_mean['whole']) * len(df[(df[subjectCol] == subject) & (df[levelACol] == levelA)][valCol].values)
+    data = np.array([df[(df[subjectCol] == subject) & (df[levelACol] == levelA)][valCol].mean() for levelA in levelAs for subject in subjects], dtype='float64')
+    sizes = np.array([len(df[(df[subjectCol] == subject) & (df[levelACol] == levelA)][valCol].values) for levelA in levelAs for subject in subjects], dtype='float64')
+    sos_factorA_error = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
     sos_factorA_error -= sos_factorA + sos_subject
 
     # 要因Bに対する誤差の平方和
-    sos_factorB_error = 0
-    for subject in subjects:
-        for levelB in levelBs:
-            mean_levelB = df[(df[subjectCol] == subject) & (df[levelBCol] == levelB)][valCol].mean()
-            sos_factorB_error += np.square(mean_levelB - cell_mean['whole']) * len(df[(df[subjectCol] == subject) & (df[levelBCol] == levelB)][valCol].values)
+    #sos_factorB_error = 0
+    data = np.array([df[(df[subjectCol] == subject) & (df[levelBCol] == levelB)][valCol].mean() for levelB in levelBs for subject in subjects], dtype='float64')
+    sizes = np.array([len(df[(df[subjectCol] == subject) & (df[levelBCol] == levelB)][valCol].values) for levelB in levelBs for subject in subjects], dtype='float64')
+    sos_factorB_error = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
     sos_factorB_error -= sos_factorB + sos_subject
 
     # 交互作用に対する誤差の平均和
     sos_interaction_error = sos_error - sos_subject - sos_factorA_error - sos_factorB_error
-
 
     # 自由度
     dof_w = len(df[valCol].values) - 1
