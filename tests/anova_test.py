@@ -3,8 +3,10 @@ from pystats.anova import one_way_anova_between_subject
 from pystats.anova import one_way_anova_within_subject
 from pystats.anova import two_way_anova_between_subject
 from pystats.anova import two_way_anova_within_subject
+from pystats.anova import twawis_mat
 import pandas as pd
 from numba import jit
+import numpy as np
 '''
 sample_data = {
     'type': ['A','A','A','A','B','B','B','B','C','C','C','C',],
@@ -35,11 +37,17 @@ sample_data = {
 import time
 
 start = time.time()
-for i in range(100):
+for i in range(300):
     two_way_anova_within_subject(pd.DataFrame(sample_data), levelACol='levelA', levelBCol='levelB', subjectCol='subject', valCol='value')
 elapsed_time = time.time() - start
 print ("elapsed_time:{0}".format(elapsed_time) + "[sec]")
 
+sample_data = np.array([[6.0,4.0,5.0,3.0,2.0], [10.0,8.0,10.0,8.0,9.0], [11.0,12.0,12.0,10.0,10.0], [5.0,4.0,2.0,2.0,2.0], [7.0,6.0,5.0,4.0,3.0], [12.0,8.0,5.0,6.0,4.0]])
+start = time.time()
+for i in range(300):
+    twawis_mat(sample_data, 2, 3)
+elapsed_time = time.time() - start
+print ("elapsed_time:{0}".format(elapsed_time) + "[sec]")
 
 '''
 import time
