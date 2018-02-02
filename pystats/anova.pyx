@@ -5,20 +5,12 @@ import numpy as np
 cimport numpy as np
 
 def sum_of_square(np.ndarray[double, ndim=1] data, double mean):
-    cdef double sos = 0
-    for datum in data:
-        sos += np.square(datum - mean)
-    return sos
-
+    return sum(np.square(data - mean))
 
 def sum_of_square_with_weight(np.ndarray[double, ndim=1] data, double mean, np.ndarray[double, ndim=1] weight):
-    cdef double sos = 0
-    cdef int length = len(data)
-    for i in range(length):
-        sos += np.square(data[i] - mean) * weight[i]
-    return sos
+    return sum(np.square(data - mean) * weight)
 
-def two_way_anova_between_subject(df, levelACol, levelBCol, valCol):
+def two_way_anova_between_subject(df, char* levelACol, char* levelBCol, char* valCol):
     levelAs = list(pd.unique(df[levelACol]))
     levelBs = list(pd.unique(df[levelBCol]))
 
@@ -35,7 +27,7 @@ def two_way_anova_between_subject(df, levelACol, levelBCol, valCol):
     cell_mean['whole'] = df[valCol].mean()
 
     # 全体平方和
-    sos_w = sum_of_square(df[valCol].values, cell_mean['whole'])
+    cdef double sos_w = sum_of_square(df[valCol].values, cell_mean['whole'])
 
     # 要因Aの主効果の平方和
     cdef double sos_factorA = 0
@@ -87,7 +79,7 @@ def two_way_anova_between_subject(df, levelACol, levelBCol, valCol):
     })
     return table.ix[:, ['factor', 'sos', 'dof', 'mean_S', 'F']]
 
-def two_way_anova_within_subject(df, levelACol, levelBCol, subjectCol, valCol):
+def two_way_anova_within_subject(df, str levelACol, str levelBCol, str subjectCol, str valCol):
     levelAs = list(pd.unique(df[levelACol]))
     levelBs = list(pd.unique(df[levelBCol]))
 
@@ -104,29 +96,22 @@ def two_way_anova_within_subject(df, levelACol, levelBCol, subjectCol, valCol):
     cell_mean['whole'] = df[valCol].mean()
 
     # 全体平方和
-    sos_w = sum_of_square(df[valCol].values, cell_mean['whole'])
+    cdef double sos_w = sum_of_square(df[valCol].values, cell_mean['whole'])
 
     # 要因Aの主効果の平方和
-    data = np.array([cell_mean[levelA]['mean_A'] for levelA in levelAs], dtype='float64')
-    sizes = np.array([len(df[df[levelACol] == levelA].values) for levelA in levelAs], dtype='float64')
-    sos_factorA = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
+    cdef double sos_factorA = sum_of_square_with_weight(np.array([cell_mean[levelA]['mean_A'] for levelA in levelAs], dtype='float64'), cell_mean['whole'], np.array([len(df[df[levelACol] == levelA].values) for levelA in levelAs], dtype='float64'))
 
     # 要因Bの主効果の平方和
-    data = np.array([cell_mean['mean_B'][levelB] for levelB in levelBs], dtype='float64')
-    sizes = np.array([len(df[df[levelBCol] == levelB].values) for levelB in levelBs], dtype='float64')
-    sos_factorB = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
+    cdef double sos_factorB = sum_of_square_with_weight(np.array([cell_mean['mean_B'][levelB] for levelB in levelBs], dtype='float64'), cell_mean['whole'], np.array([len(df[df[levelBCol] == levelB].values) for levelB in levelBs], dtype='float64'))
 
     # セル平均の平方和
-    data = np.array([cell_mean[levelA][levelB] for levelA in levelAs for levelB in levelBs], dtype='float64')
-    sizes = np.array([len(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)].values) for levelA in levelAs for levelB in levelBs], dtype='float64')
-    sos_cell = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
+    cdef double sos_cell = sum_of_square_with_weight(np.array([cell_mean[levelA][levelB] for levelA in levelAs for levelB in levelBs], dtype='float64'), cell_mean['whole'], np.array([len(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)].values) for levelA in levelAs for levelB in levelBs], dtype='float64'))
 
     # 交互作用の平方和
-    sos_interaction = sos_cell - sos_factorA - sos_factorB
+    cdef double sos_interaction = sos_cell - sos_factorA - sos_factorB
 
     # 誤差の平方和
-    data = np.array([sum_of_square(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)][valCol].values, cell_mean[levelA][levelB]) for levelA in levelAs for levelB in levelBs], dtype='float64')
-    sos_error = np.sum(data)
+    cdef double sos_error = np.sum(np.array([sum_of_square(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)][valCol].values, cell_mean[levelA][levelB]) for levelA in levelAs for levelB in levelBs], dtype='float64'))
 
     # ここまでは同様
     # 誤差の平方和 = 個人差の平方和 + 要因Aに対する誤差の平方和 + 要因Bに対する誤差の平方和 + 交互作用に対する誤差の平方和　に分解
@@ -134,47 +119,41 @@ def two_way_anova_within_subject(df, levelACol, levelBCol, subjectCol, valCol):
     mean_ss = {subject: df[df[subjectCol] == subject][valCol].mean() for subject in subjects} # 各被験者の平均
 
     # 個人差の平方和
-    data = np.array(list(mean_ss.values()), dtype='float64')
-    sizes = np.array([len(df[df[subjectCol] == subject][valCol].values) for subject in subjects], dtype='float64')
-    sos_subject = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
+    cdef double sos_subject = sum_of_square_with_weight(np.array(list(mean_ss.values()), dtype='float64'), cell_mean['whole'], np.array([len(df[df[subjectCol] == subject][valCol].values) for subject in subjects], dtype='float64'))
 
     # 要因Aに対する誤差の平方和
-    data = np.array([df[(df[subjectCol] == subject) & (df[levelACol] == levelA)][valCol].mean() for levelA in levelAs for subject in subjects], dtype='float64')
-    sizes = np.array([len(df[(df[subjectCol] == subject) & (df[levelACol] == levelA)][valCol].values) for levelA in levelAs for subject in subjects], dtype='float64')
-    sos_factorA_error = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
+    cdef double sos_factorA_error = sum_of_square_with_weight(np.array([df[(df[subjectCol] == subject) & (df[levelACol] == levelA)][valCol].mean() for levelA in levelAs for subject in subjects], dtype='float64'), cell_mean['whole'], np.array([len(df[(df[subjectCol] == subject) & (df[levelACol] == levelA)][valCol].values) for levelA in levelAs for subject in subjects], dtype='float64'))
     sos_factorA_error -= sos_factorA + sos_subject
 
     # 要因Bに対する誤差の平方和
     #sos_factorB_error = 0
-    data = np.array([df[(df[subjectCol] == subject) & (df[levelBCol] == levelB)][valCol].mean() for levelB in levelBs for subject in subjects], dtype='float64')
-    sizes = np.array([len(df[(df[subjectCol] == subject) & (df[levelBCol] == levelB)][valCol].values) for levelB in levelBs for subject in subjects], dtype='float64')
-    sos_factorB_error = sum_of_square_with_weight(data, cell_mean['whole'], sizes)
+    cdef double sos_factorB_error = sum_of_square_with_weight(np.array([df[(df[subjectCol] == subject) & (df[levelBCol] == levelB)][valCol].mean() for levelB in levelBs for subject in subjects], dtype='float64'), cell_mean['whole'], np.array([len(df[(df[subjectCol] == subject) & (df[levelBCol] == levelB)][valCol].values) for levelB in levelBs for subject in subjects], dtype='float64'))
     sos_factorB_error -= sos_factorB + sos_subject
 
     # 交互作用に対する誤差の平均和
-    sos_interaction_error = sos_error - sos_subject - sos_factorA_error - sos_factorB_error
+    cdef double sos_interaction_error = sos_error - sos_subject - sos_factorA_error - sos_factorB_error
 
     # 自由度
-    dof_w = len(df[valCol].values) - 1
-    dof_factorA = len(levelAs) - 1
-    dof_factorB = len(levelBs) - 1
-    dof_interaction = dof_factorA * dof_factorB
-    dof_subject = len(subjects) - 1
-    dof_AxS = dof_factorA * dof_subject
-    dof_BxS = dof_factorB * dof_subject
-    dof_AxBxS = dof_interaction * dof_subject
+    cdef double dof_w = len(df[valCol].values) - 1
+    cdef double dof_factorA = len(levelAs) - 1
+    cdef double dof_factorB = len(levelBs) - 1
+    cdef double dof_interaction = dof_factorA * dof_factorB
+    cdef double dof_subject = len(subjects) - 1
+    cdef double dof_AxS = dof_factorA * dof_subject
+    cdef double dof_BxS = dof_factorB * dof_subject
+    cdef double dof_AxBxS = dof_interaction * dof_subject
 
-    ms_factorA = sos_factorA / dof_factorA
-    ms_factorB = sos_factorB / dof_factorB
-    ms_interation = sos_interaction / dof_interaction
-    ms_subject = sos_subject / dof_subject
-    ms_AxS = sos_factorA_error / dof_AxS
-    ms_BxS = sos_factorB_error / dof_BxS
-    ms_AxBxS = sos_interaction_error / dof_AxBxS
+    cdef double ms_factorA = sos_factorA / dof_factorA
+    cdef double ms_factorB = sos_factorB / dof_factorB
+    cdef double ms_interation = sos_interaction / dof_interaction
+    cdef double ms_subject = sos_subject / dof_subject
+    cdef double ms_AxS = sos_factorA_error / dof_AxS
+    cdef double ms_BxS = sos_factorB_error / dof_BxS
+    cdef double ms_AxBxS = sos_interaction_error / dof_AxBxS
 
-    F_A = ms_factorA / ms_AxS
-    F_B = ms_factorB / ms_BxS
-    F_interation = ms_interation / ms_AxBxS
+    cdef double F_A = ms_factorA / ms_AxS
+    cdef double F_B = ms_factorB / ms_BxS
+    cdef double F_interation = ms_interation / ms_AxBxS
 
     table = pd.DataFrame({
         'factor': ['subject',levelACol, 'A x S', levelBCol, 'B x S', 'interaction', 'interaction x S', 'whole'],
