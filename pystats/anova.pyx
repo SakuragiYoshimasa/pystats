@@ -1,11 +1,23 @@
 #coding: utf-8
-from numba import jit
-from pystats.utility import sum_of_square
-from pystats.utility import sum_of_square_with_weight
+
 import pandas as pd
 import numpy as np
+cimport numpy as np
 
-@jit
+def sum_of_square(np.ndarray[double, ndim=1] data, double mean):
+    cdef double sos = 0
+    for datum in data:
+        sos += np.square(datum - mean)
+    return sos
+
+
+def sum_of_square_with_weight(np.ndarray[double, ndim=1] data, double mean, np.ndarray[double, ndim=1] weight):
+    cdef double sos = 0
+    cdef int length = len(data)
+    for i in range(length):
+        sos += np.square(data[i] - mean) * weight[i]
+    return sos
+
 def two_way_anova_between_subject(df, levelACol, levelBCol, valCol):
     levelAs = list(pd.unique(df[levelACol]))
     levelBs = list(pd.unique(df[levelBCol]))
@@ -26,45 +38,45 @@ def two_way_anova_between_subject(df, levelACol, levelBCol, valCol):
     sos_w = sum_of_square(df[valCol].values, cell_mean['whole'])
 
     # 要因Aの主効果の平方和
-    sos_factorA = 0
+    cdef double sos_factorA = 0
     for levelA in levelAs:
         sos_factorA += np.square(cell_mean[levelA]['mean_A'] - cell_mean['whole']) * len(df[df[levelACol] == levelA].values)
 
     # 要因Bの主効果の平方和
-    sos_factorB = 0
+    cdef double sos_factorB = 0
     for levelB in levelBs:
         sos_factorB += np.square(cell_mean['mean_B'][levelB] - cell_mean['whole']) * len(df[df[levelBCol] == levelB].values)
 
     # セル平均の平方和
-    sos_cell = 0
+    cdef double sos_cell = 0
     for levelA in levelAs:
         for levelB in levelBs:
             sos_cell += np.square(cell_mean[levelA][levelB] - cell_mean['whole']) * len(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)].values)
 
     # 交互作用の平方和
-    sos_interaction = sos_cell - sos_factorA - sos_factorB
+    cdef double sos_interaction = sos_cell - sos_factorA - sos_factorB
 
     # 誤差の平方和
-    sos_error = 0
+    cdef double sos_error = 0
     for levelA in levelAs:
         for levelB in levelBs:
             sos_error += sum_of_square(df[(df[levelACol] == levelA) & (df[levelBCol] == levelB)][valCol].values, cell_mean[levelA][levelB])
 
     # 自由度
-    dof_w = len(df[valCol].values) - 1
-    dof_factorA = len(levelAs) - 1
-    dof_factorB = len(levelBs) - 1
-    dof_interaction = dof_factorA * dof_factorB
-    dof_error = dof_w - dof_factorA - dof_factorB - dof_interaction
+    cdef double dof_w = len(df[valCol].values) - 1
+    cdef double dof_factorA = len(levelAs) - 1
+    cdef double dof_factorB = len(levelBs) - 1
+    cdef double dof_interaction = dof_factorA * dof_factorB
+    cdef double dof_error = dof_w - dof_factorA - dof_factorB - dof_interaction
 
-    ms_factorA = sos_factorA / dof_factorA
-    ms_factorB = sos_factorB / dof_factorB
-    ms_interation = sos_interaction / dof_interaction
-    ms_error = sos_error / dof_error
+    cdef double ms_factorA = sos_factorA / dof_factorA
+    cdef double ms_factorB = sos_factorB / dof_factorB
+    cdef double ms_interation = sos_interaction / dof_interaction
+    cdef double ms_error = sos_error / dof_error
 
-    F_A = ms_factorA / ms_error
-    F_B = ms_factorB / ms_error
-    F_interation = ms_interation / ms_error
+    cdef double F_A = ms_factorA / ms_error
+    cdef double F_B = ms_factorB / ms_error
+    cdef double F_interation = ms_interation / ms_error
 
     table = pd.DataFrame({
         'factor': [levelACol, levelBCol, 'interaction', 'error', 'whole'],
@@ -176,7 +188,7 @@ def two_way_anova_within_subject(df, levelACol, levelBCol, subjectCol, valCol):
 # 1 - way anova １要因被験者間分散分析
 # 分散分析表をreturnする
 # Inter:=群間, Intra:=郡内
-@jit
+
 def one_way_anova_between_subject(df, levelCol, valCol):
     levels = list(pd.unique(df[levelCol]))
     level_num = len(levels)
@@ -217,7 +229,6 @@ def one_way_anova_between_subject(df, levelCol, valCol):
 
 # 1 - way anova １要因被験者内分散分析
 # 分散分析表をreturnする
-@jit
 def one_way_anova_within_subject(df, levelCol, subjectCol, valCol):
     levels = list(pd.unique(df[levelCol]))
     level_num = len(levels)
