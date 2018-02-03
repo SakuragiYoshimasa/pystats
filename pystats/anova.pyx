@@ -136,14 +136,8 @@ def twawis_mat(np.ndarray[double, ndim=2] data, int levelANum, int levelBNum):
   cdef double F_A = ms_factorA / ms_AxS
   cdef double F_B = ms_factorB / ms_BxS
   cdef double F_interation = ms_interation / ms_AxBxS
-  table = pd.DataFrame({
-      'factor': ['subject', 'A', 'A x S', 'B', 'B x S', 'interaction', 'interaction x S', 'whole'],
-      'sos': [sos_subject, sos_factorA, sos_factorA_error, sos_factorB, sos_factorB_error, sos_interaction, sos_interaction_error, sos_w],
-      'dof': [dof_subject, dof_factorA, dof_AxS, dof_factorB, dof_BxS, dof_interaction, dof_AxBxS, dof_w],
-      'mean_S': [ms_subject, ms_factorA, ms_AxS, ms_factorB, ms_BxS, ms_interation, ms_AxBxS, None],
-      'F': [None, F_A, None, F_B, None, F_interation, None, None]
-  })
-  return table.ix[:, ['factor', 'sos', 'dof', 'mean_S', 'F']]
+
+  return [F_A, F_B, F_interation]
 
 def two_way_anova_within_subject(df, str levelACol, str levelBCol, str subjectCol, str valCol):
 
