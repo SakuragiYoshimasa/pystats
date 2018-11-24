@@ -3,11 +3,12 @@
 import pandas as pd
 import numpy as np
 cimport numpy as np
+ctypedef np.float32_t FLOAT_t
 
-def sum_of_square(np.ndarray[double, ndim=1] data, double mean):
+def sum_of_square(np.ndarray[FLOAT_t, ndim=1] data, FLOAT_t mean):
     return sum(np.square(data - mean))
 
-def sum_of_square_with_weight(np.ndarray[double, ndim=1] data, double mean, np.ndarray[double, ndim=1] weight):
+def sum_of_square_with_weight(np.ndarray[FLOAT_t, ndim=1] data, FLOAT_t mean, np.ndarray[FLOAT_t, ndim=1] weight):
     return sum(np.square(data - mean) * weight)
 
 def two_way_anova_between_subject(df, char* levelACol, char* levelBCol, char* valCol):
@@ -79,63 +80,63 @@ def two_way_anova_between_subject(df, char* levelACol, char* levelBCol, char* va
     })
     return table.ix[:, ['factor', 'sos', 'dof', 'mean_S', 'F']]
 
-def twawis_mat(np.ndarray[double, ndim=2] data, int levelANum, int levelBNum):
+def twawis_mat(np.ndarray[FLOAT_t, ndim=2] data, int levelANum, int levelBNum):
 
-  cdef double w_mean = np.mean(data)
+  cdef FLOAT_t w_mean = np.mean(data)
   cell_means_levelA_levelB = np.mean(data, axis=1)
   cell_means_levelAs = np.array([np.mean(data[i * levelBNum: (i + 1) * levelBNum]) for i in range(levelANum)])
   cell_means_levelBs = np.array([np.mean(data[i::levelBNum]) for i in range(levelBNum)])
 
   cdef int subjectCount = len(data[0])
   # 全体平方和
-  cdef double sos_w = sum_of_square(np.ravel(data), w_mean)
+  cdef FLOAT_t sos_w = sum_of_square(np.ravel(data), w_mean)
   # 要因Aの主効果の平方和
-  cdef double sos_factorA = sum_of_square(cell_means_levelAs, w_mean) * levelBNum * subjectCount
+  cdef FLOAT_t sos_factorA = sum_of_square(cell_means_levelAs, w_mean) * levelBNum * subjectCount
   # 要因Bの主効果の平方和
-  cdef double sos_factorB = sum_of_square(cell_means_levelBs, w_mean) * levelANum * subjectCount
+  cdef FLOAT_t sos_factorB = sum_of_square(cell_means_levelBs, w_mean) * levelANum * subjectCount
   # セル平均の平方和
-  cdef double sos_cell = sum_of_square(cell_means_levelA_levelB, w_mean) * subjectCount
+  cdef FLOAT_t sos_cell = sum_of_square(cell_means_levelA_levelB, w_mean) * subjectCount
   # 交互作用の平方和
-  cdef double sos_interaction = sos_cell - sos_factorA - sos_factorB
+  cdef FLOAT_t sos_interaction = sos_cell - sos_factorA - sos_factorB
   # 誤差の平方和
   cdef int dataSize = len(data)
   errors = [sum_of_square(data[i], cell_means_levelA_levelB[i]) for i in range(dataSize)]
-  cdef double sos_error = np.sum(errors)
+  cdef FLOAT_t sos_error = np.sum(errors)
 
   # ここまでは同様
   # 誤差の平方和 = 個人差の平方和 + 要因Aに対する誤差の平方和 + 要因Bに対する誤差の平方和 + 交互作用に対する誤差の平方和　に分解
   mean_ss = np.mean(data, axis=0) # 各被験者の平均
   # 個人差の平方和
-  cdef double sos_subject = sum_of_square(mean_ss, w_mean) * dataSize
+  cdef FLOAT_t sos_subject = sum_of_square(mean_ss, w_mean) * dataSize
   # 要因Aに対する誤差の平方和
-  cdef double sos_factorA_error = sum_of_square(np.mean(np.reshape(data, (levelBNum, subjectCount * levelANum), 'F'), axis=0), w_mean) * levelBNum
+  cdef FLOAT_t sos_factorA_error = sum_of_square(np.mean(np.reshape(data, (levelBNum, subjectCount * levelANum), 'F'), axis=0), w_mean) * levelBNum
   sos_factorA_error -= sos_factorA + sos_subject
   # 要因Bに対する誤差の平方和
-  cdef double sos_factorB_error = sum_of_square(np.mean(np.reshape(data, (levelANum, subjectCount * levelBNum)), axis=0), w_mean) * levelANum
+  cdef FLOAT_t sos_factorB_error = sum_of_square(np.mean(np.reshape(data, (levelANum, subjectCount * levelBNum)), axis=0), w_mean) * levelANum
   sos_factorB_error -= sos_factorB + sos_subject
   # 交互作用に対する誤差の平均和
-  cdef double sos_interaction_error = sos_error - sos_subject - sos_factorA_error - sos_factorB_error
+  cdef FLOAT_t sos_interaction_error = sos_error - sos_subject - sos_factorA_error - sos_factorB_error
   # 自由度
-  cdef double dof_w = levelANum * levelBNum * subjectCount - 1
-  cdef double dof_factorA = levelANum - 1
-  cdef double dof_factorB = levelBNum - 1
-  cdef double dof_interaction = dof_factorA * dof_factorB
-  cdef double dof_subject = subjectCount - 1
-  cdef double dof_AxS = dof_factorA * dof_subject
-  cdef double dof_BxS = dof_factorB * dof_subject
-  cdef double dof_AxBxS = dof_interaction * dof_subject
+  cdef FLOAT_t dof_w = levelANum * levelBNum * subjectCount - 1
+  cdef FLOAT_t dof_factorA = levelANum - 1
+  cdef FLOAT_t dof_factorB = levelBNum - 1
+  cdef FLOAT_t dof_interaction = dof_factorA * dof_factorB
+  cdef FLOAT_t dof_subject = subjectCount - 1
+  cdef FLOAT_t dof_AxS = dof_factorA * dof_subject
+  cdef FLOAT_t dof_BxS = dof_factorB * dof_subject
+  cdef FLOAT_t dof_AxBxS = dof_interaction * dof_subject
 
-  cdef double ms_factorA = sos_factorA / dof_factorA
-  cdef double ms_factorB = sos_factorB / dof_factorB
-  cdef double ms_interation = sos_interaction / dof_interaction
-  cdef double ms_subject = sos_subject / dof_subject
-  cdef double ms_AxS = sos_factorA_error / dof_AxS
-  cdef double ms_BxS = sos_factorB_error / dof_BxS
-  cdef double ms_AxBxS = sos_interaction_error / dof_AxBxS
+  cdef FLOAT_t ms_factorA = sos_factorA / dof_factorA
+  cdef FLOAT_t ms_factorB = sos_factorB / dof_factorB
+  cdef FLOAT_t ms_interation = sos_interaction / dof_interaction
+  cdef FLOAT_t ms_subject = sos_subject / dof_subject
+  cdef FLOAT_t ms_AxS = sos_factorA_error / dof_AxS
+  cdef FLOAT_t ms_BxS = sos_factorB_error / dof_BxS
+  cdef FLOAT_t ms_AxBxS = sos_interaction_error / dof_AxBxS
 
-  cdef double F_A = ms_factorA / ms_AxS
-  cdef double F_B = ms_factorB / ms_BxS
-  cdef double F_interation = ms_interation / ms_AxBxS
+  cdef FLOAT_t F_A = ms_factorA / ms_AxS
+  cdef FLOAT_t F_B = ms_factorB / ms_BxS
+  cdef FLOAT_t F_interation = ms_interation / ms_AxBxS
 
   return [F_A, F_B, F_interation]
 
